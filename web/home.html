@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tonk Create</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"
+        integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2"
+        crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <form hx-post="/createGame" hx-target="body">
+        <input type="text" name="gameName" placeholder="Game Name" required> <br> <br>
+        <input type="text" name="playerName" placeholder="Player Name" required> <br> <br>
+        <label>Max players</label>
+        <input type="number" name="maxPlayers" placeholder="2" min="2" max="8" required> <br> <br>
+        <label>Start game after</label>
+        <select name="startAfter" required>
+            <option value="1">1 min</option>
+            <option value="3">3 min</option>
+            <option value="5">5 min</option>
+        </select> <br> <br>
+        <label>Tank top</label>
+        <select name="tankTopColor" required>
+            <option value="blue">Blue</option>
+            <option value="purple">Purple</option>
+            <option value="pink">Pink</option>
+            <option value="orange">Orange</option>
+            <option value="brown">Brown</option>
+        </select> <br> <br>
+        <label>Tank bottom</label>
+        <select name="tankBaseColor" required>
+            <option value="blue">Blue</option>
+            <option value="purple">Purple</option>
+            <option value="pink">Pink</option>
+            <option value="orange">Orange</option>
+            <option value="brown">Brown</option>
+        </select> <br> <br>
+        <input type="submit" value="create">
+    </form>
+</body>
+
+</html>
