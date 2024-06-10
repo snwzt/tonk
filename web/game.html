@@ -45,16 +45,16 @@
 
             let shieldMode = false;
             let mineMode = false;
-            let rocketMode = true;
+            let rocketMode = false;
             let burstMode = false;
 
             const weapons = {};
-            const weaponTypes = ["mine", "rocket", "shot-normal", "shot-fast"];
+            const weaponTypes = ["mine", "rocket", "normal", "burst"];
             const directions = [0, 45, 90, 135, 180, 225, 270, 315];
 
             weaponTypes.forEach(type => {
                 directions.forEach(angle => {
-                    const key = type + (type === "mine" || type === "shot-normal" ? "" : `-${angle}`);
+                    const key = type + (type === "mine" || type === "normal" ? "" : `-${angle}`);
                     weapons[key] = new Image();
                     weapons[key].src = `/assets/svg/weapons/${key}.svg`;
                 });
@@ -83,12 +83,22 @@
 
                 mines.forEach(mine => context.drawImage(weapons["mine"], mine.x, mine.y));
 
-                if (currentImage.complete) {
-                    context.drawImage(currentImage, xPosition, yPosition);
-                } else {
-                    currentImage.onload = () => context.drawImage(currentImage, xPosition, yPosition);
+
+
+                if (shieldMode) {
+                    context.beginPath();
+                    context.arc(xPosition + currentImage.width / 2, yPosition + currentImage.height / 2, currentImage.width, 0, 2 * Math.PI);
+                    context.strokeStyle = 'rgba(0, 0, 255, 0.1)';
+                    context.lineWidth = 5;
+                    context.stroke();
                 }
 
+                shots.forEach(shot => {
+                    const key = shot.currentFire === "normal" ? "normal" : `${shot.currentFire}-${shot.angle}`;
+                    context.drawImage(weapons[key], shot.x, shot.y);
+                });
+
+                // tank
                 const text = "this is a tank";
                 const textWidth = context.measureText(text).width;
                 const textHeight = 20;
@@ -100,18 +110,11 @@
                 context.font = "16px Arial";
                 context.fillText(text, xPosition + padding, yPosition - padding);
 
-                if (shieldMode) {
-                    context.beginPath();
-                    context.arc(xPosition + currentImage.width / 2, yPosition + currentImage.height / 2, currentImage.width, 0, 2 * Math.PI);
-                    context.strokeStyle = 'rgba(0, 0, 255, 0.1)';
-                    context.lineWidth = 5;
-                    context.stroke();
+                if (currentImage.complete) {
+                    context.drawImage(currentImage, xPosition, yPosition);
+                } else {
+                    currentImage.onload = () => context.drawImage(currentImage, xPosition, yPosition);
                 }
-
-                shots.forEach(shot => {
-                    const key = shot.currentFire === "shot-normal" ? "shot-normal" : `${shot.currentFire}-${shot.angle}`;
-                    context.drawImage(weapons[key], shot.x, shot.y);
-                });
             };
 
             const move = () => {
@@ -210,7 +213,7 @@
                         vx: shotVelocity * Math.cos(angleInRadians),
                         vy: -shotVelocity * Math.sin(angleInRadians),
                         angle: rotationAngle,
-                        currentFire: "shot-fast"
+                        currentFire: "burst"
                     });
                     return
                 }
@@ -221,7 +224,7 @@
                     vx: shotVelocity * Math.cos(angleInRadians),
                     vy: -shotVelocity * Math.sin(angleInRadians),
                     angle: rotationAngle,
-                    currentFire: "shot-normal"
+                    currentFire: "normal"
                 });
             };
 

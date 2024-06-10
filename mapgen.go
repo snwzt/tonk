@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 )
@@ -101,16 +100,7 @@ func generateMap(width, height int, obstacleProbability map[string]float64, ocea
 	return area
 }
 
-func printArea(area [][]string) {
-	for _, row := range area {
-		for _, cell := range row {
-			fmt.Print(cell + " ")
-		}
-		fmt.Println()
-	}
-}
-
-func main() {
+func NewMap() [][]string {
 	generator := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	width, height := 150, 75
@@ -119,5 +109,6 @@ func main() {
 	lakeProbability := 0.5
 
 	area := generateMap(width, height, obstacleProbability, lakeProbability, generator)
-	printArea(area)
+
+	return area
 }
