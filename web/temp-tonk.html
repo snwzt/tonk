@@ -449,7 +449,7 @@
 
             dataChannel.onopen = () => {
                 console.log('Data channel opened');
-                setInterval(() => sendState(dataChannel), 16); // Send state every 16ms
+                setInterval(() => sendState(dataChannel), 100); // Send state every 100ms
             };
 
             dataChannel.onmessage = recieveState;
