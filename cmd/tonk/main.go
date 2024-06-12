@@ -1,1 +1,5 @@
 package tonk
+
+func main() {
+
+}

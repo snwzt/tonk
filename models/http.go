@@ -11,3 +11,10 @@ type JoinGameRequest struct {
 	TankTopColor  string `form:"tankTopColor"`
 	TankBaseColor string `form:"tankBaseColor"`
 }
+
+type Leaderboard map[string]Score
+
+type Score struct {
+	Kills int `json:"kills"`
+	Death int `json:"death"`
+}
