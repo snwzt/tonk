@@ -1,293 +1,469 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Move SVG on Canvas with Keypress</title>
-    <style>
-        #myCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            background-color: #948363;
-        }
-    </style>
-</head>
+{{ block "game" . }}
 
 <body>
     <canvas id="myCanvas"></canvas>
-
-    <!-- 
-    ADD MULTIPLAYER FUNCTIONALITY BY SENDING EVENTS AND PLAYER POSITION
-    ADD FUNCTIONALITY OF DISPLAYING WATER, STONE and GREENS and REACTIONS TO THEM BY RECIEVING FROM SERVER
-    PLAYER W PLAYER INTERACTION WITH ATTACKS
-    EVENTUAL CONSISTENCY with TCP AND UDP -->
-
     <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            const canvas = document.getElementById('myCanvas');
-            const context = canvas.getContext('2d');
-            const keysPressed = {};
-            let xPosition = 0;
-            let yPosition = 0;
-            let dir = 'tanks';
-            let rotationAngle = 0;
-            let moving = false;
-            let velocityX = 0;
-            let velocityY = 0;
-            const acceleration = 0.2;
-            const maxSpeed = 5;
-            const recoilSpeed = 10;
-            const shots = [];
-            const mines = [];
-            let spacebarPressed = false;
+        // EXTRAS
 
-            let shieldMode = false;
-            let mineMode = false;
-            let rocketMode = false;
-            let burstMode = false;
+        // canvas
+        const canvas = document.getElementById('myCanvas');
+        const context = canvas.getContext('2d');
 
-            const weapons = {};
-            const weaponTypes = ["mine", "rocket", "normal", "burst"];
-            const directions = [0, 45, 90, 135, 180, 225, 270, 315];
+        const resizeCanvas = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+        resizeCanvas(); // just do once!
 
-            weaponTypes.forEach(type => {
-                directions.forEach(angle => {
-                    const key = type + (type === "mine" || type === "normal" ? "" : `-${angle}`);
-                    weapons[key] = new Image();
-                    weapons[key].src = `/assets/svg/weapons/${key}.svg`;
-                });
+        // GAME
+
+        // loading assets
+        const weapons = {};
+        const weaponTypes = ["mine", "rocket", "normal", "burst"];
+        const directions = [0, 45, 90, 135, 180, 225, 270, 315];
+
+        weaponTypes.forEach(type => {
+            directions.forEach(angle => {
+                const key = type + (type === "mine" || type === "normal" ? "" : `-${angle}`);
+                weapons[key] = new Image();
+                weapons[key].src = `/assets/svg/weapons/${key}.svg`;
+            });
+        });
+
+        const tanks = {};
+        const moveDir = ['', '-up', '-down'];
+
+        const loadImage = (dir, color, direction) => {
+            const img = new Image();
+            img.src = `/assets/svg/tanks${dir}/${color}/tank${dir}-${color}-${direction}.svg`;
+            img.onerror = () => console.error(`Failed to load the SVG image for ${dir} at ${direction} degrees.`);
+            return img;
+        };
+
+        moveDir.forEach(dir => {
+            tanks[`tanks${dir}`] = {};
+            directions.forEach(direction => {
+                tanks[`tanks${dir}`][direction] = loadImage(dir, "{{ .userTankColor }}", direction);
+            });
+        });
+
+        // user's
+        const keysPressed = {};
+
+        const username = "{{ .username }}";
+        const userID = "{{ .userID }}";
+        const gameUrl = "{{ .gameUrl }}";
+        const acceleration = 0.2;
+        const maxSpeed = 5;
+        const recoilSpeed = 10;
+
+        let velocityX = 0;
+        let velocityY = 0;
+        let spacebarPressed = false;
+    
+        // user's sync
+        class Tank {
+            constructor(xPosition, yPosition, rotationAngle, dir, shieldMode, mineMode, rocketMode, burstMode) {
+                this._xPosition = xPosition;
+                this._yPosition = yPosition;
+                this._rotationAngle = rotationAngle;
+                this._dir = dir;
+                this._shieldMode = shieldMode;
+                this._mineMode = mineMode;
+                this._rocketMode = rocketMode;
+                this._burstMode = burstMode;
+            }
+
+            get xPosition() {
+                return this._xPosition;
+            }
+
+            set xPosition(value) {
+                this._xPosition = value;
+            }
+
+            get yPosition() {
+                return this._yPosition;
+            }
+
+            set yPosition(value) {
+                this._yPosition = value;
+            }
+
+            get rotationAngle() {
+                return this._rotationAngle;
+            }
+
+            set rotationAngle(value) {
+                this._rotationAngle = value;
+            }
+
+            get dir() {
+                return this._dir;
+            }
+
+            set dir(value) {
+                this._dir = value;
+            }
+
+            get shieldMode() {
+                return this._shieldMode;
+            }
+
+            set shieldMode(value) {
+                this._shieldMode = value;
+            }
+
+            get mineMode() {
+                return this._mineMode;
+            }
+
+            set mineMode(value) {
+                this._mineMode = value;
+            }
+
+            get rocketMode() {
+                return this._rocketMode;
+            }
+
+            set rocketMode(value) {
+                this._rocketMode = value;
+            }
+
+            get burstMode() {
+                return this._burstMode;
+            }
+
+            set burstMode(value) {
+                this._burstMode = value;
+            }
+        }
+
+        // sync
+        const userTanks = {};
+        const shots = [];
+        const mines = [];
+
+        // initialize self user's tank
+        userTanks[userID] = new Tank(0, 0, 0, 'tanks', false, false, false, false);
+
+        // draw
+        const draw = () => {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            mines.forEach(mine => context.drawImage(weapons["mine"], mine.x, mine.y));
+
+            shots.forEach(shot => {
+                const key = shot.currentFire === "normal" ? "normal" : `${shot.currentFire}-${shot.angle}`;
+                context.drawImage(weapons[key], shot.x, shot.y);
             });
 
-            const tanks = {};
-            const moveDir = ['', '-up', '-down'];
+            for (const userTankKey in userTanks) {
+                if (userTanks.hasOwnProperty(userTankKey)) {
+                    const userTank = userTanks[userTankKey];
+                    const currentImage = tanks[userTank.dir][userTank.rotationAngle];
 
-            const loadImage = (dir, color, direction) => {
-                const img = new Image();
-                img.src = `/assets/svg/tanks${dir}/${color}/tank${dir}-${color}-${direction}.svg`;
-                img.onerror = () => console.error(`Failed to load the SVG image for ${dir} at ${direction} degrees.`);
-                return img;
-            };
-
-            moveDir.forEach(dir => {
-                tanks[`tanks${dir}`] = {};
-                directions.forEach(direction => {
-                    tanks[`tanks${dir}`][direction] = loadImage(dir, 'pu-pu', direction);
-                });
-            });
-
-            const draw = () => {
-                context.clearRect(0, 0, canvas.width, canvas.height);
-                const currentImage = tanks[dir][rotationAngle];
-
-                mines.forEach(mine => context.drawImage(weapons["mine"], mine.x, mine.y));
-
-
-
-                if (shieldMode) {
-                    context.beginPath();
-                    context.arc(xPosition + currentImage.width / 2, yPosition + currentImage.height / 2, currentImage.width, 0, 2 * Math.PI);
-                    context.strokeStyle = 'rgba(0, 0, 255, 0.1)';
-                    context.lineWidth = 5;
-                    context.stroke();
-                }
-
-                shots.forEach(shot => {
-                    const key = shot.currentFire === "normal" ? "normal" : `${shot.currentFire}-${shot.angle}`;
-                    context.drawImage(weapons[key], shot.x, shot.y);
-                });
-
-                // tank
-                const text = "this is a tank";
-                const textWidth = context.measureText(text).width;
-                const textHeight = 20;
-                const padding = 5;
-
-                context.fillStyle = "rgba(255, 255, 255)";
-                context.fillRect(xPosition, yPosition - textHeight - padding, textWidth + padding * 2, textHeight + padding);
-                context.fillStyle = "black";
-                context.font = "16px Arial";
-                context.fillText(text, xPosition + padding, yPosition - padding);
-
-                if (currentImage.complete) {
-                    context.drawImage(currentImage, xPosition, yPosition);
-                } else {
-                    currentImage.onload = () => context.drawImage(currentImage, xPosition, yPosition);
-                }
-            };
-
-            const move = () => {
-                if (keysPressed['w'] && keysPressed['d']) {
-                    velocityX = Math.min(velocityX + acceleration, maxSpeed);
-                    velocityY = Math.max(velocityY - acceleration, -maxSpeed);
-                    dir = 'tanks-up';
-                } else if (keysPressed['w'] && keysPressed['a']) {
-                    velocityX = Math.max(velocityX - acceleration, -maxSpeed);
-                    velocityY = Math.max(velocityY - acceleration, -maxSpeed);
-                    dir = 'tanks-down';
-                } else if (keysPressed['s'] && keysPressed['d']) {
-                    velocityX = Math.min(velocityX + acceleration, maxSpeed);
-                    velocityY = Math.min(velocityY + acceleration, maxSpeed);
-                    dir = 'tanks-down';
-                } else if (keysPressed['s'] && keysPressed['a']) {
-                    velocityX = Math.max(velocityX - acceleration, -maxSpeed);
-                    velocityY = Math.min(velocityY + acceleration, maxSpeed);
-                    dir = 'tanks-up';
-                } else if (keysPressed['w']) {
-                    velocityY = Math.max(velocityY - acceleration, -maxSpeed);
-                    dir = 'tanks-up';
-                } else if (keysPressed['a']) {
-                    velocityX = Math.max(velocityX - acceleration, -maxSpeed);
-                    dir = 'tanks';
-                } else if (keysPressed['s']) {
-                    velocityY = Math.min(velocityY + acceleration, maxSpeed);
-                    dir = 'tanks-down';
-                } else if (keysPressed['d']) {
-                    velocityX = Math.min(velocityX + acceleration, maxSpeed);
-                    dir = 'tanks';
-                } else {
-                    velocityX *= 0.9;
-                    velocityY *= 0.9;
-                }
-
-                xPosition += velocityX;
-                yPosition += velocityY;
-
-                shots.forEach(shot => {
-                    shot.x += shot.vx;
-                    shot.y += shot.vy;
-                });
-
-                shots.forEach((shot, index) => {
-                    if (shot.x < 0 || shot.x > canvas.width || shot.y < 0 || shot.y > canvas.height) {
-                        shots.splice(index, 1);
+                    // shield
+                    if (userTank.shieldMode) {
+                        context.beginPath();
+                        context.arc(userTank.xPosition + currentImage.width / 2, userTank.yPosition + currentImage.height / 2, currentImage.width, 0, 2 * Math.PI);
+                        context.strokeStyle = 'rgba(0, 0, 255, 0.1)';
+                        context.lineWidth = 5;
+                        context.stroke();
                     }
-                });
 
-                draw();
-            };
+                    // tank
+                    if (currentImage.complete) {
+                        context.drawImage(currentImage, userTank.xPosition, userTank.yPosition);
+                    } else {
+                        currentImage.onload = () => context.drawImage(currentImage, userTank.xPosition, userTank.yPosition);
+                    }
 
-            const animate = () => {
-                if (Object.keys(keysPressed).length > 0 || Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1 || shots.length > 0) {
-                    move();
-                    requestAnimationFrame(animate);
-                } else {
-                    moving = false;
+                    // text
+                    const textWidth = context.measureText(userID).width;
+                    const textHeight = 20;
+                    const padding = 5;
+
+                    context.fillStyle = "rgba(255, 255, 255, 0.8)";
+                    context.fillRect(userTank.xPosition, userTank.yPosition - textHeight - padding, textWidth + padding * 2, textHeight + padding);
+                    context.fillStyle = "black";
+                    context.font = "16px Arial";
+                    context.fillText(userID, userTank.xPosition + padding, userTank.yPosition - padding);
                 }
-            };
+            }
+        }
 
-            const applyRecoil = () => {
-                const angleInRadians = rotationAngle * (Math.PI / 180);
-                velocityX -= Math.cos(angleInRadians) * recoilSpeed;
-                velocityY += Math.sin(angleInRadians) * recoilSpeed;
-                setTimeout(() => {
-                    velocityX += Math.cos(angleInRadians) * recoilSpeed;
-                    velocityY -= Math.sin(angleInRadians) * recoilSpeed;
-                }, 100);
-            };
+        const animate = () => {
+            if (keysPressed['w'] && keysPressed['d']) {
+                velocityX = Math.min(velocityX + acceleration, maxSpeed);
+                velocityY = Math.max(velocityY - acceleration, -maxSpeed);
+                userTanks[userID].dir = 'tanks-up';
+            } else if (keysPressed['w'] && keysPressed['a']) {
+                velocityX = Math.max(velocityX - acceleration, -maxSpeed);
+                velocityY = Math.max(velocityY - acceleration, -maxSpeed);
+                userTanks[userID].dir = 'tanks-down';
+            } else if (keysPressed['s'] && keysPressed['d']) {
+                velocityX = Math.min(velocityX + acceleration, maxSpeed);
+                velocityY = Math.min(velocityY + acceleration, maxSpeed);
+                userTanks[userID].dir = 'tanks-down';
+            } else if (keysPressed['s'] && keysPressed['a']) {
+                velocityX = Math.max(velocityX - acceleration, -maxSpeed);
+                velocityY = Math.min(velocityY + acceleration, maxSpeed);
+                userTanks[userID].dir = 'tanks-up';
+            } else if (keysPressed['w']) {
+                velocityY = Math.max(velocityY - acceleration, -maxSpeed);
+                userTanks[userID].dir = 'tanks-up';
+            } else if (keysPressed['a']) {
+                velocityX = Math.max(velocityX - acceleration, -maxSpeed);
+                userTanks[userID].dir = 'tanks';
+            } else if (keysPressed['s']) {
+                velocityY = Math.min(velocityY + acceleration, maxSpeed);
+                userTanks[userID].dir = 'tanks-down';
+            } else if (keysPressed['d']) {
+                velocityX = Math.min(velocityX + acceleration, maxSpeed);
+                userTanks[userID].dir = 'tanks';
+            } else {
+                velocityX *= 0.9;
+                velocityY *= 0.9;
+            }
 
-            const fireShot = () => {
-                const angleInRadians = rotationAngle * (Math.PI / 180);
-                const shotX = xPosition + 50 * Math.cos(angleInRadians);
-                const shotY = yPosition - 50 * Math.sin(angleInRadians);
-                const shotVelocity = 10;
+            userTanks[userID].xPosition += velocityX;
+            userTanks[userID].yPosition += velocityY;
 
-                if (rocketMode) {
-                    shots.push({
-                        x: shotX,
-                        y: shotY,
-                        vx: shotVelocity * Math.cos(angleInRadians),
-                        vy: -shotVelocity * Math.sin(angleInRadians),
-                        angle: rotationAngle,
-                        currentFire: "rocket"
-                    });
-                    rocketMode = false;
-                    return
+            shots.forEach(shot => {
+                shot.x += shot.vx;
+                shot.y += shot.vy;
+            });
+
+            shots.forEach((shot, index) => {
+                if (shot.x < 0 || shot.x > canvas.width || shot.y < 0 || shot.y > canvas.height) {
+                    shots.splice(index, 1);
                 }
+            });
 
-                if (burstMode) {
-                    shots.push({
-                        x: shotX,
-                        y: shotY,
-                        vx: shotVelocity * Math.cos(angleInRadians),
-                        vy: -shotVelocity * Math.sin(angleInRadians),
-                        angle: rotationAngle,
-                        currentFire: "burst"
-                    });
-                    return
-                }
+            draw();
 
+            requestAnimationFrame(animate); // draw at 60 FPS
+        };
+
+        animate();
+
+        // helper
+        const fireshot = () => {
+            let angleInRadians = userTanks[userID].rotationAngle * (Math.PI / 180);
+            let shotX = userTanks[userID].xPosition + 50 * Math.cos(angleInRadians);
+            let shotY = userTanks[userID].yPosition - 50 * Math.sin(angleInRadians);
+            let shotVelocity = 10;
+
+            if (userTanks[userID].rocketMode) {
                 shots.push({
+                    name: userID,
                     x: shotX,
                     y: shotY,
                     vx: shotVelocity * Math.cos(angleInRadians),
                     vy: -shotVelocity * Math.sin(angleInRadians),
-                    angle: rotationAngle,
-                    currentFire: "normal"
+                    angle: userTanks[userID].rotationAngle,
+                    currentFire: "rocket"
                 });
-            };
+                userTanks[userID].rocketMode = false;
+                return
+            }
 
-            const dropMine = () => {
-                mines.push({ x: xPosition, y: yPosition });
-                mineMode = false;
-            };
+            if (userTanks[userID].burstMode) {
+                shots.push({
+                    name: userID,
+                    x: shotX,
+                    y: shotY,
+                    vx: shotVelocity * Math.cos(angleInRadians),
+                    vy: -shotVelocity * Math.sin(angleInRadians),
+                    angle: userTanks[userID].rotationAngle,
+                    currentFire: "burst"
+                });
+                return
+            }
 
-            const handleKeyDown = (e) => {
-                if (['w', 'a', 's', 'd', 'o', 'l', ' '].includes(e.key)) {
-                    keysPressed[e.key] = true;
+            shots.push({
+                name: userID,
+                x: shotX,
+                y: shotY,
+                vx: shotVelocity * Math.cos(angleInRadians),
+                vy: -shotVelocity * Math.sin(angleInRadians),
+                angle: userTanks[userID].rotationAngle,
+                currentFire: "normal"
+            });
+        };
+
+        const applyRecoil = () => {
+            let angleInRadians = userTanks[userID].rotationAngle * (Math.PI / 180);
+            velocityX -= Math.cos(angleInRadians) * recoilSpeed;
+            velocityY += Math.sin(angleInRadians) * recoilSpeed;
+            setTimeout(() => {
+                velocityX += Math.cos(angleInRadians) * recoilSpeed;
+                velocityY -= Math.sin(angleInRadians) * recoilSpeed;
+            }, 100);
+        };
+
+        // user inputs
+        document.addEventListener('keydown', (e) => {
+            if (['w', 'a', 's', 'd', 'o', 'l', ' '].includes(e.key)) {
+                keysPressed[e.key] = true;
+            }
+
+            if (e.key === 'o') {
+                userTanks[userID].rotationAngle = (userTanks[userID].rotationAngle + 45) % 360;
+            } else if (e.key === 'l') {
+                userTanks[userID].rotationAngle = (userTanks[userID].rotationAngle - 45 + 360) % 360;
+            } else if (e.key === ' ' && !spacebarPressed) {
+                spacebarPressed = true;
+
+                if (!userTanks[userID].mineMode && !userTanks[userID].shieldMode) {
+                    applyRecoil();
+                    fireshot();
                 }
 
-                if (e.key === 'o') {
-                    rotationAngle = (rotationAngle + 45) % 360;
-                } else if (e.key === 'l') {
-                    rotationAngle = (rotationAngle - 45 + 360) % 360;
-                } else if (e.key === ' ' && !spacebarPressed) {
-                    spacebarPressed = true;
-
-                    if (!mineMode && !shieldMode) {
-                        applyRecoil();
-                        fireShot();
-                    }
-
-                    if (mineMode) {
-                        dropMine();
-                    }
+                if (userTanks[userID].mineMode) {
+                    // drop mine
+                    mines.push({ name: userID, x: userTanks[userID].xPosition, y: userTanks[userID].yPosition });
+                    userTanks[userID].mineMode = false;
                 }
-
-                if (!moving) {
-                    moving = true;
-                    requestAnimationFrame(animate);
-                }
-            };
-
-            const handleKeyUp = (e) => {
-                if (['w', 'a', 's', 'd', 'o', 'l', ' '].includes(e.key)) {
-                    delete keysPressed[e.key];
-                }
-
-                if (e.key === ' ') {
-                    spacebarPressed = false;
-                }
-
-                if (Object.keys(keysPressed).length === 0) {
-                    dir = 'tanks';
-                    draw();
-                }
-            };
-
-            const setCanvasSize = () => {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                draw();
-            };
-
-            setCanvasSize();
-            window.addEventListener('resize', setCanvasSize);
-            document.addEventListener('keydown', handleKeyDown);
-            document.addEventListener('keyup', handleKeyUp);
+            }
         });
+
+        document.addEventListener('keyup', (e) => {
+            if (['w', 'a', 's', 'd', 'o', 'l', ' '].includes(e.key)) {
+                delete keysPressed[e.key];
+            }
+
+            if (e.key === ' ') {
+                spacebarPressed = false;
+            }
+
+            if (Object.keys(keysPressed).length === 0) {
+                dir = 'tanks';
+            }
+        });
+
+        // updater
+        const sendState = (dataChannel) => {
+            // const state = {
+            //     userTanks,
+            //     shots,
+            //     mines
+            // };
+
+            const state = {
+                userTanks: { [userID]: userTanks[userID] },
+                shots: shots.filter(shot => shot.name === userID),
+                mines: mines.filter(mine => mine.name === userID)
+            };
+
+            dataChannel.send(JSON.stringify(state));
+        }
+
+        const recieveState = (event) => {
+            const msg = JSON.parse(event.data);
+
+            // Update userTanks
+            for (const key in msg.userTanks) {
+                if (msg.userTanks.hasOwnProperty(key)) {
+                    if (!userTanks[key]) {
+                        userTanks[key] = new Tank(0, 0, 0, 'tanks', false, false, false, false);
+                    }
+                    const tankData = msg.userTanks[key];
+                    userTanks[key].xPosition = parseFloat(tankData._xPosition);
+                    userTanks[key].yPosition = parseFloat(tankData._yPosition);
+                    userTanks[key].rotationAngle = parseInt(tankData._rotationAngle);
+                    userTanks[key].dir = tankData._dir;
+                    userTanks[key].shieldMode = tankData._shieldMode === true;
+                    userTanks[key].mineMode = tankData._mineMode === true;
+                    userTanks[key].rocketMode = tankData._rocketMode === true;
+                    userTanks[key].burstMode = tankData._burstMode === true;
+                }
+            }
+
+            // Update shots
+            shots.length = 0;
+            msg.shots.forEach(shotData => {
+                shots.push({
+                    name: shotData.name,
+                    x: parseFloat(shotData.x),
+                    y: parseFloat(shotData.y),
+                    vx: parseFloat(shotData.vx),
+                    vy: parseFloat(shotData.vy),
+                    angle: parseInt(shotData.angle),
+                    currentFire: shotData.currentFire
+                });
+            });
+
+            // Update mines
+            mines.length = 0;
+            msg.mines.forEach(mineData => {
+                mines.push({
+                    name: mineData.name,
+                    x: parseFloat(mineData.x),
+                    y: parseFloat(mineData.y)
+                });
+            });
+        }
+
+        // SYNC
+
+        let pc = new RTCPeerConnection({
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        });
+
+        let ws = new WebSocket("{{ .wsUrl }}");
+
+        ws.onmessage = async (event) => {
+            let msg = JSON.parse(event.data);
+
+            if (msg.sdp) {
+                await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                if (msg.sdp.type === 'offer') {
+                    console.log("offer received");
+                    let answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    ws.send(JSON.stringify({ sdp: answer }));
+                    console.log("answer sent");
+                }
+            } else if (msg.ice) {
+                try {
+                    await pc.addIceCandidate(msg.ice);
+                    console.log("ice added");
+                } catch (e) {
+                    console.error('Error adding received ice candidate', e);
+                }
+            }
+        };
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                ws.send(JSON.stringify({ ice: event.candidate }));
+                console.log("ice sent");
+            }
+        };
+
+        pc.oniceconnectionstatechange = (event) => {
+            console.log('ICE connection state:', pc.iceConnectionState);
+            if (pc.iceConnectionState === 'failed') {
+                console.log('ICE connection state is failed, restarting ICE');
+                pc.restartIce();
+            }
+        };
+
+        pc.ondatachannel = (event) => {
+            let dataChannel = event.channel;
+
+            dataChannel.onopen = () => {
+                console.log('Data channel opened');
+                setInterval(() => sendState(dataChannel), 100); // Send state every 100ms
+            };
+
+            dataChannel.onmessage = recieveState;
+        };
     </script>
 </body>
 
-</html>
+{{ end }}

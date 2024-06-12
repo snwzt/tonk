@@ -1,29 +1,4 @@
-package main
-
-import (
-	"github.com/gorilla/websocket"
-	"github.com/pion/webrtc/v4"
-	"net/http"
-)
-
-// websocket
-
-var upgrade = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-// messages
-
-type WsMsg struct {
-	SDP *webrtc.SessionDescription `json:"sdp"`
-	ICE *webrtc.ICECandidateInit   `json:"ice"`
-}
-
-type DataChanMsg State
-
-// state
+package models
 
 // Tank represents the Tank object in JSON
 type Tank struct {
@@ -61,14 +36,3 @@ type State struct {
 	Shots     []Shot          `json:"shots"`
 	Mines     []Mine          `json:"mines"`
 }
-
-// store
-
-var (
-	state = State{
-		UserTanks: make(map[string]Tank),
-		Shots:     make([]Shot, 0),
-		Mines:     make([]Mine, 0),
-	}
-	//gameMap = make(make([]int, 300), 200)
-)

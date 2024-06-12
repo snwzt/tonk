@@ -261,6 +261,61 @@
 
         animate();
 
+        // helper
+        const fireshot = () => {
+            let angleInRadians = userTanks[username].rotationAngle * (Math.PI / 180);
+            let shotX = userTanks[username].xPosition + 50 * Math.cos(angleInRadians);
+            let shotY = userTanks[username].yPosition - 50 * Math.sin(angleInRadians);
+            let shotVelocity = 10;
+
+            if (userTanks[username].rocketMode) {
+                shots.push({
+                    name: username,
+                    x: shotX,
+                    y: shotY,
+                    vx: shotVelocity * Math.cos(angleInRadians),
+                    vy: -shotVelocity * Math.sin(angleInRadians),
+                    angle: userTanks[username].rotationAngle,
+                    currentFire: "rocket"
+                });
+                userTanks[username].rocketMode = false;
+                return
+            }
+
+            if (userTanks[username].burstMode) {
+                shots.push({
+                    name: username,
+                    x: shotX,
+                    y: shotY,
+                    vx: shotVelocity * Math.cos(angleInRadians),
+                    vy: -shotVelocity * Math.sin(angleInRadians),
+                    angle: userTanks[username].rotationAngle,
+                    currentFire: "burst"
+                });
+                return
+            }
+
+            shots.push({
+                name: username,
+                x: shotX,
+                y: shotY,
+                vx: shotVelocity * Math.cos(angleInRadians),
+                vy: -shotVelocity * Math.sin(angleInRadians),
+                angle: userTanks[username].rotationAngle,
+                currentFire: "normal"
+            });
+        };
+
+        const applyRecoil = () => {
+            let angleInRadians = userTanks[username].rotationAngle * (Math.PI / 180);
+            velocityX -= Math.cos(angleInRadians) * recoilSpeed;
+            velocityY += Math.sin(angleInRadians) * recoilSpeed;
+            setTimeout(() => {
+                velocityX += Math.cos(angleInRadians) * recoilSpeed;
+                velocityY -= Math.sin(angleInRadians) * recoilSpeed;
+            }, 100);
+        };
+
         // user inputs
         document.addEventListener('keydown', (e) => {
             if (['w', 'a', 's', 'd', 'o', 'l', ' '].includes(e.key)) {
@@ -275,48 +330,8 @@
                 spacebarPressed = true;
 
                 if (!userTanks[username].mineMode && !userTanks[username].shieldMode) {
-                    // fire shot
-                    let angleInRadians = userTanks[username].rotationAngle * (Math.PI / 180);
-                    let shotX = userTanks[username].xPosition + 50 * Math.cos(angleInRadians);
-                    let shotY = userTanks[username].yPosition - 50 * Math.sin(angleInRadians);
-                    let shotVelocity = 10;
-
-                    if (userTanks[username].rocketMode) {
-                        shots.push({
-                            name: username,
-                            x: shotX,
-                            y: shotY,
-                            vx: shotVelocity * Math.cos(angleInRadians),
-                            vy: -shotVelocity * Math.sin(angleInRadians),
-                            angle: userTanks[username].rotationAngle,
-                            currentFire: "rocket"
-                        });
-                        userTanks[username].rocketMode = false;
-                        return
-                    }
-
-                    if (userTanks[username].burstMode) {
-                        shots.push({
-                            name: username,
-                            x: shotX,
-                            y: shotY,
-                            vx: shotVelocity * Math.cos(angleInRadians),
-                            vy: -shotVelocity * Math.sin(angleInRadians),
-                            angle: userTanks[username].rotationAngle,
-                            currentFire: "burst"
-                        });
-                        return
-                    }
-
-                    shots.push({
-                        name: username,
-                        x: shotX,
-                        y: shotY,
-                        vx: shotVelocity * Math.cos(angleInRadians),
-                        vy: -shotVelocity * Math.sin(angleInRadians),
-                        angle: userTanks[username].rotationAngle,
-                        currentFire: "normal"
-                    });
+                    applyRecoil();
+                    fireshot();
                 }
 
                 if (userTanks[username].mineMode) {
@@ -343,11 +358,18 @@
 
         // updater
         const sendState = (dataChannel) => {
+            // const state = {
+            //     userTanks,
+            //     shots,
+            //     mines
+            // };
+
             const state = {
-                userTanks,
-                shots,
-                mines
+                userTanks: { [username]: userTanks[username] },
+                shots: shots.filter(shot => shot.name === username),
+                mines: mines.filter(mine => mine.name === username)
             };
+
             dataChannel.send(JSON.stringify(state));
         }
 

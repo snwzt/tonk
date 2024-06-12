@@ -5,29 +5,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tonk Join</title>
+    <style>
+        #myCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #948363;
+        }
+    </style>
     <script src="https://unpkg.com/htmx.org@1.9.12"
         integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2"
         crossorigin="anonymous"></script>
+        
 </head>
 
 <body>
-    <form hx-post="/joinGame" hx-target="body">
+    <form hx-post="/joinGame/{{ .gameID }}" hx-target="body">
         <input type="text" name="playerName" placeholder="Player Name" required> <br> <br>
         <label>Tank top</label>
         <select name="tankTopColor" required>
-            <option value="blue">Blue</option>
-            <option value="purple">Purple</option>
-            <option value="pink">Pink</option>
-            <option value="orange">Orange</option>
-            <option value="brown">Brown</option>
+            <option value="bl">Blue</option>
+            <option value="pu">Purple</option>
+            <option value="pi">Pink</option>
+            <option value="or">Orange</option>
+            <option value="br">Brown</option>
         </select> <br> <br>
         <label>Tank bottom</label>
         <select name="tankBaseColor" required>
-            <option value="blue">Blue</option>
-            <option value="purple">Purple</option>
-            <option value="pink">Pink</option>
-            <option value="orange">Orange</option>
-            <option value="brown">Brown</option>
+            <option value="bl">Blue</option>
+            <option value="pu">Purple</option>
+            <option value="pi">Pink</option>
+            <option value="or">Orange</option>
+            <option value="br">Brown</option>
         </select> <br> <br>
         <input type="submit" value="join">
     </form>

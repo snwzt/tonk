@@ -1,8 +1,8 @@
 build:
-	@go build -o bin/tt .
+	@go build -o bin/tonk .
 
 run:
-	@./bin/tt
+	@./bin/tonk
 
 clean:
 	@rm -rf bin
